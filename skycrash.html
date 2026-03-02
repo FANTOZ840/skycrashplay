@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SkyCrash Ultimate</title>
+<style>
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background: linear-gradient(135deg,#8b0000 0%,#330000 100%);
+  color:white;
+  text-align:center;
+}
+
+/* HISTORY TOP */
+#history{
+  display:flex;
+  justify-content:flex-start;
+  overflow-x:auto;
+  padding:10px;
+  gap:8px;
+  background:#220000;
+}
+.history-item{
+  padding:5px 12px;
+  border-radius:10px;
+  font-weight:bold;
+  font-size:14px;
+  white-space:nowrap;
+}
+
+/* MULTIPLIER */
+#multiplier{
+  font-size:80px;
+  margin-top:20px;
+  color:#ff4d4d;
+  text-shadow:0 0 10px #ff0000;
+}
+
+/* CANVAS FOR JET */
+#gameCanvas{
+  background:#330000;
+  display:block;
+  margin:20px auto;
+  border-radius:8px;
+}
+
+/* BET CONTROLS */
+#controls{
+  margin-top:20px;
+}
+button{
+  padding:10px 18px;
+  font-size:16px;
+  margin:5px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  transition: transform 0.1s;
+}
+button:hover{ transform: scale(1.05); }
+.bet-btn{ background:#00aa00; color:white; }
+.cash-btn{ background:#ffaa00; color:black; }
+.plusminus{ background:#444; color:white; }
+
+/* BET DISPLAY */
+#betDisplay{
+  font-size:18px;
+  margin:5px 0;
+}
+
+/* PLAYERS PANEL */
+#playersPanel{
+  margin-top:20px;
+  background:#220000;
+  padding:10px;
+  max-height:300px;
+  overflow:auto;
+}
+#playersPanel h3{
+  margin:0 0 5px 0;
+}
+#playersList div{
+  display:flex;
+  justify-content:space-between;
+  padding:6px 10px;
+  margin:3px 0;
+  border-radius:6px;
+  font-size:13px;
+}
+.cashed{background:#003300;}
+.lost{background:#330000;color:#ff4444;}
+.playing{background:#220000;}
+</style>
+</head>
+<body>
+
+<!-- HISTORY -->
+<div id="history"></div>
+
+<!-- MULTIPLIER -->
+<div id="multiplier">0.00x</div>
+<div id="status">Starting...</div>
+
+<!-- CANVAS FOR JET -->
+<canvas id="gameCanvas" width="800" height="300"></canvas>
+
+<!-- BET CONTROLS -->
+<div id="controls">
+  <button class="plusminus" onclick="changeBet(-10)">-</button>
+  Bet: <span id="betAmount">100</span>
+  <button class="plusminus" onclick="changeBet(10)">+</button>
+  <br>
+  <button id="betBtn" class="bet-btn" onclick="placeBet()">BET</button>
+  <button id="cashBtn" class="cash-btn" onclick="cashOut()" style="display:none;">CASH OUT</button>
+</div>
+
+<!-- LIVE PLAYERS PANEL -->
+<div id="playersPanel">
+  <h3>Live Players (<span id="playerCount">0</span>)</h3>
+  <div id="playersList"></div>
+</div>
+
+<script>
+// ---------------- VARIABLES ----------------
+let multiplier = 0;
+let crashPoint = 0;
+let interval;
+let historyList = [];
+let betAmount = 100;
+let betPlaced = false;
+let cashedOut = false;
+let players = [];
+const playerNames = [
+  "John Mwangi","Jane Wairimu","Odhiambo Kiprotich","Kelvin Njenga",
+  "Janet Atieno","Wairimu Chebet","Joyce Achieng","Faith Njeri",
+  "Njeri Wangari","Kanja Otieno","Douglas Kimani","Michael Ochieng"
+];
+
+// ---------------- HISTORY ----------------
+function updateHistory(value){
+  historyList.unshift(value);
+  if(historyList.length>10) historyList.pop();
+  const historyDiv=document.getElementById("history");
+  historyDiv.innerHTML="";
+  historyList.forEach(num=>{
+    const item=document.createElement("div");
+    item.classList.add("history-item");
+    if(num<2) item.style.background="#cc0000";
+    else if(num<10) item.style.background="#ff9900";
+    else item.style.background="#00cc66";
+    item.innerText=num.toFixed(2)+"x";
+    historyDiv.appendChild(item);
+  });
+}
+
+// ---------------- PLAYERS ----------------
+function generatePlayers(){
+  players=[];
+  let totalPlayers = Math.floor(Math.random()*6)+10;
+  for(let i=0;i<totalPlayers;i++){
+    players.push({
+      name: playerNames[i%playerNames.length]+i,
+      bet: Math.floor(Math.random()*500)+50,
+      autoCash: Math.random()*20+1,
+      status:"playing"
+    });
+  }
+  document.getElementById("playerCount").innerText=players.length;
+  updatePlayersDisplay(0,false);
+}
+
+function updatePlayersDisplay(current, crashed=false){
+  const list=document.getElementById("playersList");
+  list.innerHTML="";
+  players.forEach(p=>{
+    if(!crashed && p.status==="playing" && current>=p.autoCash){
+      p.status="cashed";
+    }
+    if(crashed && p.status==="playing"){
+      p.status="lost";
+    }
+    const div=document.createElement("div");
+    div.innerHTML = p.name + " - Bet: "+p.bet;
+    if(p.status==="cashed"){
+      let win=p.bet*p.autoCash;
+      div.innerHTML += " | Cashed: "+p.autoCash.toFixed(2)+"x | Won: "+win.toFixed(0);
+      div.className="cashed";
+    } else if(p.status==="lost"){
+      div.innerHTML += " | LOST";
+      div.className="lost";
+    } else{
+      div.innerHTML += " | Playing...";
+      div.className="playing";
+    }
+    list.appendChild(div);
+  });
+}
+
+// ---------------- BET CONTROL ----------------
+function changeBet(value){
+  betAmount+=value;
+  if(betAmount<10) betAmount=10;
+  document.getElementById("betAmount").innerText=betAmount;
+}
+
+function placeBet(){
+  betPlaced=true;
+  cashedOut=false;
+  document.getElementById("betBtn").style.display="none";
+  document.getElementById("cashBtn").style.display="inline-block";
+  document.getElementById("status").innerText="Bet placed: "+betAmount;
+}
+
+function cashOut(){
+  if(betPlaced && !cashedOut){
+    cashedOut=true;
+    let win=betAmount*multiplier;
+    document.getElementById("status").innerText="You won: "+win.toFixed(2);
+    document.getElementById("cashBtn").style.display="none";
+    document.getElementById("betBtn").style.display="inline-block";
+    betPlaced=false;
+  }
+}
+
+// ---------------- CANVAS JET ----------------
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let path = [];
+
+function drawJet(mult){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Calculate jet position
+  let jetX = 50 + (canvas.width-100)*(mult/30);
+  let jetY = 250 - (mult/30)*250;
+  path.push({x:jetX,y:jetY});
+
+  // Draw trail
+  ctx.beginPath();
+  ctx.moveTo(50,250);
+  path.forEach(p=>{ ctx.lineTo(p.x,p.y); });
+  ctx.strokeStyle="yellow";
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  // Draw jet
+  ctx.fillStyle="red";
+  ctx.font="30px Arial";
+  ctx.fillText("✈️",jetX-15,jetY+10);
+}
+
+// ---------------- START ROUND ----------------
+function startRound(){
+  multiplier=0;
+  crashPoint=Math.random()*28+2;
+  betPlaced=false;
+  cashedOut=false;
+  document.getElementById("betBtn").style.display="inline-block";
+  document.getElementById("cashBtn").style.display="none";
+  document.getElementById("status").innerText="Flying...";
+
+  generatePlayers();
+  path = [];
+
+  clearInterval(interval);
+  interval=setInterval(()=>{
+    multiplier += 0.2 + Math.random()*0.3;
+    if(multiplier>30) multiplier=30;
+    document.getElementById("multiplier").innerText=multiplier.toFixed(2)+"x";
+
+    drawJet(multiplier);
+    updatePlayersDisplay(multiplier,false);
+
+    if(multiplier>=crashPoint){
+      clearInterval(interval);
+      document.getElementById("multiplier").innerText=crashPoint.toFixed(2)+"x";
+
+      // Jet explosion
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      let last = path[path.length-1];
+      ctx.fillStyle="orange";
+      ctx.font="40px Arial";
+      ctx.fillText("💥", last.x-15, last.y+10);
+
+      if(betPlaced && !cashedOut){
+        document.getElementById("status").innerText="You Lost!";
+      } else{
+        document.getElementById("status").innerText="CRASHED";
+      }
+
+      updatePlayersDisplay(multiplier,true);
+      updateHistory(crashPoint);
+
+      setTimeout(()=>{
+        document.getElementById("status").innerText="Waiting for next round...";
+        setTimeout(startRound,2000);
+      },1500);
+    }
+
+  },80);
+}
+
+startRound();
+</script>
+</body>
+</html>
